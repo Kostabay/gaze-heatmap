@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Теплокарта взгляда</title>
-<script src="https://cdn.jsdelivr.net/npm/@webgazer-ts/core@latest/dist/webgazer-ts.umd.cjs"></script>
+<script type="module">
+  import webgazer from 'https://cdn.jsdelivr.net/npm/@webgazer-ts/core@latest/dist/webgazer-ts.js';
+  window.webgazer = webgazer;
+</script>
 <style>
   body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; background: #f5f5f5; }
   #startBtn { padding: 15px 30px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; }
