@@ -84,8 +84,8 @@ startBtn.addEventListener('click', async function() {
         gazeData.push({ x: Math.round(x), y: Math.round(y), t: timestamp });
 
         dot.style.display = 'block';
-        dot.style.left = (data.x) + 'px';
-        dot.style.top = (data.y) + 'px';
+dot.style.left = (data.x + window.scrollX) + 'px';
+dot.style.top = (data.y + window.scrollY) + 'px';
       }
     }).begin();
 
