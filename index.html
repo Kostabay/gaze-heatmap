@@ -36,8 +36,10 @@
 </div>
 <div id="dot"></div>
 
-<script src="webgazer.js"></script>
-<script>
+<script type="module">
+  import webgazer from 'https://cdn.jsdelivr.net/npm/@webgazer-ts/core@latest/dist/webgazer-ts.js';
+  window.webgazer = webgazer;
+</script>
 let gazeData = [];
 let tracking = false;
 let startTime = 0;
