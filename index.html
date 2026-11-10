@@ -3,20 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <title>Теплокарта взгляда</title>
-<script type="module">
-  import webgazer from 'https://cdn.jsdelivr.net/npm/@webgazer-ts/core@latest/dist/webgazer-ts.js';
-  window.webgazer = webgazer;
-</script>
 <style>
   body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; background: #f5f5f5; }
   #startBtn { padding: 15px 30px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; }
-  #startBtn:hover { background: #45a049; }
+  #calibrateBtn { padding: 15px 30px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; display: none; }
+  #saveBtn { padding: 12px 25px; font-size: 16px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; display: none; }
   #imageContainer { position: relative; display: inline-block; margin-top: 20px; }
   #targetImage { max-width: 90vw; max-height: 70vh; display: block; }
-  #dot { position: absolute; width: 20px; height: 20px; background: red; border-radius: 50%; opacity: 0.6; pointer-events: none; display: none; transform: translate(-50%, -50%); }
+  #dot { position: fixed; width: 20px; height: 20px; background: red; border-radius: 50%; opacity: 0.7; pointer-events: none; display: none; transform: translate(-50%, -50%); z-index: 9999; }
   #status { font-size: 16px; color: #333; margin: 15px; }
-  #saveBtn { padding: 12px 25px; font-size: 16px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; display: none; }
   #uploadBox { margin: 20px; padding: 20px; border: 2px dashed #999; border-radius: 10px; background: white; display: inline-block; }
+  .calib-dot { position: fixed; width: 30px; height: 30px; background: #e91e63; border-radius: 50%; z-index: 10000; cursor: pointer; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
@@ -24,21 +21,22 @@
 <h1>Теплокарта взгляда</h1>
 
 <div id="uploadBox">
-  <p><b>Шаг 1.</b> Загрузите изображение для теста:</p>
+  <p><b>Шаг 1.</b> Загрузите изображение:</p>
   <input type="file" id="imageInput" accept="image/*">
 </div>
 
-<button id="startBtn">Шаг 2. Начать отслеживание взгляда</button>
+<button id="startBtn">Шаг 2. Включить камеру</button>
+<button id="calibrateBtn">Шаг 3. Калибровка (нажмите и смотрите на точки)</button>
+<button id="saveBtn">Шаг 4. Сохранить данные (CSV)</button>
 
 <div id="status"></div>
 
 <div id="imageContainer">
   <img id="targetImage" src="" alt="">
-  <div id="dot"></div>
 </div>
+<div id="dot"></div>
 
-<button id="saveBtn">Шаг 3. Сохранить данные (CSV)</button>
-
+<script src="webgazer.min.js"></script>
 <script>
 let gazeData = [];
 let tracking = false;
@@ -47,45 +45,51 @@ let imageElement = document.getElementById('targetImage');
 let dot = document.getElementById('dot');
 let status = document.getElementById('status');
 let startBtn = document.getElementById('startBtn');
+let calibrateBtn = document.getElementById('calibrateBtn');
 let saveBtn = document.getElementById('saveBtn');
 let imageInput = document.getElementById('imageInput');
 
+// Загрузка картинки
 imageInput.addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (file) {
     const reader = new FileReader();
     reader.onload = function(ev) {
       imageElement.src = ev.target.result;
-      status.textContent = 'Изображение загружено. Нажмите "Начать отслеживание".';
+      status.textContent = 'Изображение загружено.';
     };
     reader.readAsDataURL(file);
   }
 });
 
+// Запуск камеры
 startBtn.addEventListener('click', async function() {
   if (!imageElement.src || imageElement.src === window.location.href) {
     alert('Сначала загрузите изображение!');
     return;
   }
-
-  status.textContent = 'Запуск камеры... Разрешите доступ в браузере.';
-
+  status.textContent = 'Запуск камеры... Разрешите доступ.';
   try {
     await webgazer.setGazeListener(function(data, elapsedTime) {
-      if (data == null) return;
-      if (!tracking) return;
+      if (data == null || !tracking) return;
 
+      // Привязка к границам экрана, чтобы шарик не улетал
+      let x = Math.max(0, Math.min(window.innerWidth, data.x));
+      let y = Math.max(0, Math.min(window.innerHeight, data.y));
+
+      // Показываем шарик на экране (фиксированно)
+      dot.style.display = 'block';
+      dot.style.left = x + 'px';
+      dot.style.top = y + 'px';
+
+      // Сбор данных для CSV (координаты относительно страницы с учётом скролла)
       const rect = imageElement.getBoundingClientRect();
-      const x = data.x - rect.left;
-      const y = data.y - rect.top;
+      const imgX = x - rect.left;
+      const imgY = y - rect.top;
 
-      if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      if (imgX >= 0 && imgX <= rect.width && imgY >= 0 && imgY <= rect.height) {
         const timestamp = Date.now() - startTime;
-        gazeData.push({ x: Math.round(x), y: Math.round(y), t: timestamp });
-
-        dot.style.display = 'block';
-dot.style.left = (data.x + window.scrollX) + 'px';
-dot.style.top = (data.y + window.scrollY) + 'px';
+        gazeData.push({ x: Math.round(imgX), y: Math.round(imgY), t: timestamp });
       }
     }).begin();
 
@@ -96,21 +100,63 @@ dot.style.top = (data.y + window.scrollY) + 'px';
     startTime = Date.now();
     gazeData = [];
 
-    status.textContent = 'Калибровка: смотрите на точки и кликайте по ним. Затем смотрите на изображение.';
+    status.textContent = 'Камера включена. Теперь нажмите "Калибровка".';
     startBtn.style.display = 'none';
+    calibrateBtn.style.display = 'inline-block';
     saveBtn.style.display = 'inline-block';
 
   } catch (err) {
-    status.textContent = 'Ошибка: ' + err.message + '. Убедитесь, что камера разрешена.';
+    status.textContent = 'Ошибка: ' + err.message;
   }
 });
 
+// Калибровка: 9 точек
+calibrateBtn.addEventListener('click', async function() {
+  if (typeof webgazer === 'undefined') {
+    alert('Сначала включите камеру (Шаг 2).');
+    return;
+  }
+
+  calibrateBtn.style.display = 'none';
+  status.textContent = 'Калибровка: смотрите на розовую точку и кликайте по ней.';
+
+  const margin = 80;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const coords = [
+    [margin, margin], [w/2, margin], [w-margin, margin],
+    [margin, h/2], [w/2, h/2], [w-margin, h/2],
+    [margin, h-margin], [w/2, h-margin], [w-margin, h-margin]
+  ];
+
+  for (let i = 0; i < coords.length; i++) {
+    await new Promise((resolve) => {
+      const calibDot = document.createElement('div');
+      calibDot.className = 'calib-dot';
+      calibDot.style.left = coords[i][0] + 'px';
+      calibDot.style.top = coords[i][1] + 'px';
+      document.body.appendChild(calibDot);
+
+      calibDot.addEventListener('click', async (e) => {
+        // Обучаем модель: взгляд -> клик
+        await webgazer.recordScreenPosition(e.clientX, e.clientY, 'click');
+        calibDot.remove();
+        resolve();
+      }, { once: true });
+    });
+  }
+
+  status.textContent = 'Калибровка завершена! Смотрите на изображение.';
+  calibrateBtn.style.display = 'inline-block';
+});
+
+// Сохранение CSV
 saveBtn.addEventListener('click', function() {
   tracking = false;
-  webgazer.pause();
+  if (typeof webgazer !== 'undefined') webgazer.pause();
 
   if (gazeData.length === 0) {
-    alert('Нет данных для сохранения.');
+    alert('Нет данных. Сначала посмотрите на изображение.');
     return;
   }
 
@@ -125,7 +171,7 @@ saveBtn.addEventListener('click', function() {
   link.download = 'gaze_data_' + Date.now() + '.csv';
   link.click();
 
-  status.textContent = 'Данные сохранены! Файл CSV скачан. Отправьте его исследователю.';
+  status.textContent = 'Данные сохранены! Файл CSV скачан.';
 });
 </script>
 
