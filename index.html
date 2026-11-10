@@ -71,6 +71,14 @@ startBtn.addEventListener('click', async function() {
   status.textContent = 'Запуск камеры... Разрешите доступ в браузере.';
 
   try {
+    // Указываем локальные пути к моделям
+if (window.webgazer && window.webgazer.params) {
+    if (!window.webgazer.params.blazeFace) { window.webgazer.params.blazeFace = {}; }
+    window.webgazer.params.blazeFace.modelUrl = 'models/blazeface/model.json';
+    
+    if (!window.webgazer.params.faceMesh) { window.webgazer.params.faceMesh = {}; }
+    window.webgazer.params.faceMesh.modelUrl = 'models/facemesh/model.json';
+}
     await webgazer.setGazeListener(function(data, elapsedTime) {
       if (data == null) return;
       if (!tracking) return;
