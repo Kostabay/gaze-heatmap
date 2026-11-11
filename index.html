@@ -3,17 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <title>Теплокарта взгляда</title>
-<script type="module">
-  import webgazer from 'https://cdn.jsdelivr.net/npm/@webgazer-ts/core@latest/dist/webgazer-ts.js';
-  window.webgazer = webgazer;
-</script>
 <style>
   body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; background: #f5f5f5; }
   #startBtn { padding: 15px 30px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; }
   #startBtn:hover { background: #45a049; }
   #imageContainer { position: relative; display: inline-block; margin-top: 20px; }
   #targetImage { max-width: 90vw; max-height: 70vh; display: block; }
-  #dot { position: absolute; width: 20px; height: 20px; background: red; border-radius: 50%; opacity: 0.6; pointer-events: none; display: none; transform: translate(-50%, -50%); }
+  #dot { position: fixed; width: 20px; height: 20px; background: red; border-radius: 50%; opacity: 0.7; pointer-events: none; display: none; transform: translate(-50%, -50%); z-index: 9999; }
   #status { font-size: 16px; color: #333; margin: 15px; }
   #saveBtn { padding: 12px 25px; font-size: 16px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px; display: none; }
   #uploadBox { margin: 20px; padding: 20px; border: 2px dashed #999; border-radius: 10px; background: white; display: inline-block; }
@@ -34,10 +30,13 @@
 
 <div id="imageContainer">
   <img id="targetImage" src="" alt="">
-  <div id="dot"></div>
 </div>
+<div id="dot"></div>
 
 <button id="saveBtn">Шаг 3. Сохранить данные (CSV)</button>
+
+<!-- Подключаем ОРИГИНАЛЬНЫЙ WebGazer.js, а не webgazer-ts -->
+<script src="webgazer.js"></script>
 
 <script>
 let gazeData = [];
@@ -71,29 +70,35 @@ startBtn.addEventListener('click', async function() {
   status.textContent = 'Запуск камеры... Разрешите доступ в браузере.';
 
   try {
-    // Указываем локальные пути к моделям
-if (window.webgazer && window.webgazer.params) {
-    if (!window.webgazer.params.blazeFace) { window.webgazer.params.blazeFace = {}; }
-    window.webgazer.params.blazeFace.modelUrl = 'models/blazeface/model.json';
-    
-    if (!window.webgazer.params.faceMesh) { window.webgazer.params.faceMesh = {}; }
-    window.webgazer.params.faceMesh.modelUrl = 'models/facemesh/model.json';
-}
+    // Указываем локальные пути к моделям ДО begin()
+    if (window.webgazer && window.webgazer.params) {
+      if (!window.webgazer.params.blazeFace) { window.webgazer.params.blazeFace = {}; }
+      window.webgazer.params.blazeFace.modelUrl = 'models/blazeface/model.json';
+      
+      if (!window.webgazer.params.faceMesh) { window.webgazer.params.faceMesh = {}; }
+      window.webgazer.params.faceMesh.modelUrl = 'models/facemesh/model.json';
+      console.log('Локальные пути к моделям установлены.');
+    }
+
     await webgazer.setGazeListener(function(data, elapsedTime) {
-      if (data == null) return;
-      if (!tracking) return;
+      if (data == null || !tracking) return;
 
+      // Привязка к границам экрана, чтобы шарик не улетал
+      let x = Math.max(0, Math.min(window.innerWidth, data.x));
+      let y = Math.max(0, Math.min(window.innerHeight, data.y));
+
+      dot.style.display = 'block';
+      dot.style.left = x + 'px';
+      dot.style.top = y + 'px';
+
+      // Сбор данных относительно картинки
       const rect = imageElement.getBoundingClientRect();
-      const x = data.x - rect.left;
-      const y = data.y - rect.top;
+      const imgX = x - rect.left;
+      const imgY = y - rect.top;
 
-      if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      if (imgX >= 0 && imgX <= rect.width && imgY >= 0 && imgY <= rect.height) {
         const timestamp = Date.now() - startTime;
-        gazeData.push({ x: Math.round(x), y: Math.round(y), t: timestamp });
-
-        dot.style.display = 'block';
-dot.style.left = (data.x + window.scrollX) + 'px';
-dot.style.top = (data.y + window.scrollY) + 'px';
+        gazeData.push({ x: Math.round(imgX), y: Math.round(imgY), t: timestamp });
       }
     }).begin();
 
@@ -104,7 +109,7 @@ dot.style.top = (data.y + window.scrollY) + 'px';
     startTime = Date.now();
     gazeData = [];
 
-    status.textContent = 'Калибровка: смотрите на точки и кликайте по ним. Затем смотрите на изображение.';
+    status.textContent = 'Камера включена. Смотрите на изображение.';
     startBtn.style.display = 'none';
     saveBtn.style.display = 'inline-block';
 
@@ -115,10 +120,10 @@ dot.style.top = (data.y + window.scrollY) + 'px';
 
 saveBtn.addEventListener('click', function() {
   tracking = false;
-  webgazer.pause();
+  if (typeof webgazer !== 'undefined') webgazer.pause();
 
   if (gazeData.length === 0) {
-    alert('Нет данных для сохранения.');
+    alert('Нет данных для сохранения. Сначала посмотрите на изображение.');
     return;
   }
 
@@ -133,7 +138,7 @@ saveBtn.addEventListener('click', function() {
   link.download = 'gaze_data_' + Date.now() + '.csv';
   link.click();
 
-  status.textContent = 'Данные сохранены! Файл CSV скачан. Отправьте его исследователю.';
+  status.textContent = 'Данные сохранены! Файл CSV скачан.';
 });
 </script>
 
